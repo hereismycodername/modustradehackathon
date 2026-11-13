@@ -1,0 +1,10 @@
+# Streamlit Community Cloud installs this file (it sits next to the entry point).
+# Project dependencies are the same pins as ../requirements.txt.
+streamlit==1.67.0
+Django==5.2.19
+asgiref==3.13.0
+sqlparse==0.6.1
+tzdata==2026.6
+psycopg[binary]==3.3.8
+waitress==3.0.2
+whitenoise==6.12.0
