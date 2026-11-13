@@ -35,6 +35,14 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "static_storage.ScriptPrefixStaticFilesStorage"},
 }
+MIDDLEWARE = ["demo_middleware.TokenAddressCsrf", *MIDDLEWARE]  # noqa: F405
+# Requests and the in-process notification worker write to one SQLite file;
+# immediate transactions wait for each other instead of failing as "locked".
+DATABASES["default"]["OPTIONS"] = {  # noqa: F405
+    **DATABASES["default"].get("OPTIONS", {}),  # noqa: F405
+    "transaction_mode": "IMMEDIATE",
+    "init_command": "PRAGMA journal_mode=WAL;",
+}
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "feedback:list"
 LOGOUT_REDIRECT_URL = "login"

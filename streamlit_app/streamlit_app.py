@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import secrets
 import sys
 import tempfile
 import threading
@@ -169,16 +170,62 @@ def _browser_prefix(headers: dict[str, str]) -> tuple[str, bool]:
     return ("/~/+" if host.endswith(".streamlit.app") else ""), False
 
 
+TOKEN_PATH = re.compile(r"^/s/([A-Za-z0-9_-]{20,64})(/.*)?$")
+_jars: dict[str, dict[str, str]] = {}
+_prefixes: dict[str, str] = {}
+
+
+def _keep_cookie(jar: dict[str, str], header: str) -> None:
+    """Store a cookie Django sets; Streamlit Cloud does not carry cookies."""
+    first, _, attributes = header.partition(";")
+    name, _, value = first.strip().partition("=")
+    if not name:
+        return
+    if "max-age=0" in attributes.lower().replace(" ", ""):
+        jar.pop(name, None)
+    else:
+        jar[name] = value
+
+
 async def django_site(scope, receive, send):
     if scope["type"] != "http":
         return await _django(scope, receive, send)
-    prefix, remember = _browser_prefix(_headers(scope))
+    prefix, from_page = _browser_prefix(_headers(scope))
     mount_root = scope.get("root_path", "")
     path = scope["path"]
     rest = path[len(mount_root):] if path.startswith(mount_root) else path
     # When the prefix already reaches the server, it is not added twice.
-    browser_root = mount_root if mount_root.startswith(prefix) else prefix + mount_root
-    scope = {**scope, "root_path": browser_root, "path": browser_root + rest}
+    site_root = mount_root if mount_root.startswith(prefix) else prefix + mount_root
+    match = TOKEN_PATH.match(rest)
+    if match is not None:
+        # The prefix seen with a tab's key also serves its later requests
+        # that arrive without a referring page (reloads, typed addresses).
+        if from_page:
+            _prefixes[match.group(1)] = prefix
+        else:
+            prefix = _prefixes.get(match.group(1), prefix)
+        site_root = mount_root if mount_root.startswith(prefix) else prefix + mount_root
+    if match is None:
+        # Streamlit Cloud drops cookies between the browser and the app, so
+        # every browser tab gets a random key in the address instead, and the
+        # cookies Django sets for that tab are kept here on the server.
+        token = secrets.token_urlsafe(24)
+        _jars[token] = {}
+        _prefixes[token] = prefix
+        query = scope.get("query_string", b"")
+        location = f"{site_root}/s/{token}{rest or '/'}".encode("latin-1") + (b"?" + query if query else b"")
+        await send({"type": "http.response.start", "status": 302, "headers": [
+            (b"location", location), (b"content-length", b"0"), (b"cache-control", b"no-store"),
+            (b"content-security-policy", FRAME_POLICY)]})
+        await send({"type": "http.response.body", "body": b""})
+        return
+    token, rest = match.group(1), match.group(2) or "/"
+    jar = _jars.setdefault(token, {})
+    browser_root = f"{site_root}/s/{token}"
+    request_headers = [(k, v) for k, v in scope.get("headers", []) if k.lower() != b"cookie"]
+    if jar:
+        request_headers.append((b"cookie", "; ".join(f"{k}={v}" for k, v in jar.items()).encode("latin-1")))
+    scope = {**scope, "root_path": browser_root, "path": browser_root + rest, "headers": request_headers}
     scope.pop("raw_path", None)
 
     async def send_adapted(message):
@@ -186,12 +233,12 @@ async def django_site(scope, receive, send):
             # ASGI expects lowercase names. Django keeps "Content-Length", and
             # Streamlit's gzip layer would then add a second, conflicting one.
             headers = [(bytes(k).lower(), bytes(v)) for k, v in message.get("headers", [])]
+            for key, value in headers:
+                if key == b"set-cookie":
+                    _keep_cookie(jar, value.decode("latin-1"))
             # The site is shown inside the Streamlit page; allow only that frame.
-            headers = [(k, v) for k, v in headers if k != b"x-frame-options"]
+            headers = [(k, v) for k, v in headers if k not in (b"x-frame-options", b"set-cookie")]
             headers.append((b"content-security-policy", FRAME_POLICY))
-            if remember:
-                cookie = f"{PREFIX_COOKIE}={quote(prefix, safe='')}; Path=/; SameSite=Lax; HttpOnly"
-                headers.append((b"set-cookie", cookie.encode("latin-1")))
             message = {**message, "headers": headers}
         await send(message)
 
