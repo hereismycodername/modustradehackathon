@@ -10,6 +10,9 @@
 **Формат результата — работающий MVP** (ТЗ, раздел 4.3). Все данные в демо синтетические
 и не описывают реальные события компании.
 
+**Онлайн-демо:** [titanteam-modustradehackathon.streamlit.app](https://titanteam-modustradehackathon.streamlit.app/) —
+логины указаны на странице входа, пароль для всех `ModusDemo2026!`.
+
 ## Коротко
 
 - **Проблема.** Предложения и жалобы теряются в почте и чатах, у них нет ответственного и срока,
@@ -224,6 +227,8 @@ docker compose run --rm migrate python manage.py load_demo
 </details>
 
 ### Онлайн-демо на Streamlit Community Cloud
+
+Работающее демо: [titanteam-modustradehackathon.streamlit.app](https://titanteam-modustradehackathon.streamlit.app/).
 
 Папка [streamlit_app/](streamlit_app/) запускает этот же сайт без изменений внутри приложения
 Streamlit: функции, роли и дизайн те же. При развёртывании на
