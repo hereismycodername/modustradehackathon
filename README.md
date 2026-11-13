@@ -223,6 +223,23 @@ docker compose run --rm migrate python manage.py load_demo
 
 </details>
 
+### Онлайн-демо на Streamlit Community Cloud
+
+Папка [streamlit_app/](streamlit_app/) запускает этот же сайт без изменений внутри приложения
+Streamlit: функции, роли и дизайн те же. При развёртывании на
+[share.streamlit.io](https://share.streamlit.io) укажите:
+
+| Поле | Значение |
+| --- | --- |
+| Repository | `hereismycodername/modustradehackathon` |
+| Branch | `main` |
+| Main file path | `streamlit_app/streamlit_app.py` |
+| Python (Advanced settings) | 3.13 |
+
+База — SQLite во временной папке: демо-данные загружаются при каждом старте, а введённые
+данные пропадают при перезапуске приложения. Подробности и необязательные секреты:
+[streamlit_app/README.md](streamlit_app/README.md).
+
 ## Демо-аккаунты
 
 Набор для защиты (`load_hackathon_demo`):
